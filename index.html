@@ -31,16 +31,13 @@
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
     }
 
-    @keyframes pulseNotification {
-      0% { transform: scale(1) rotate(0deg); }
-      25% { transform: scale(1.05) rotate(1deg); }
-      50% { transform: scale(1) rotate(-1deg); }
-      75% { transform: scale(1.05) rotate(1deg); }
-      100% { transform: scale(1) rotate(0deg); }
+    @keyframes floatUp {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(-100px); }
     }
 
-    .animate-pulse-notification {
-      animation: pulseNotification 2s infinite;
+    .animate-float-up {
+      animation: floatUp 0.4s ease-out forwards;
     }
   </style>
 </head>
@@ -64,24 +61,41 @@
       });
       const [promoData, setPromoData] = useState({ phone: '' });
       const [selectedCategory, setSelectedCategory] = useState('all');
+      const [selectedFlavor, setSelectedFlavor] = useState(null);
+      const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
 
-      // Categorias dos sabores
+      // Categorias e preços
       const categorizedFlavors = {
-        tradicional: [
-          "Brigadeiro", "Brigadeiro com Amendoim", "Café", "Confete", "Confete 2",
-          "Doce de Leite Crocante", "Leite Condensado", "Limão", "Pacoca"
+        tradicionais: [
+          "Brigadeiro", "Brigadeiro com Amendoim", "Doce de Leite Crocante",
+          "Dois Amores", "Café", "Leite Condensado", "Limão"
         ],
-        especial: [
-          "Dois Amores", "Ferreiro", "Maracuja", "Mousse Chocolate", "Mousse de Chocolate", "Oreo"
+        especiais: [
+          "Maracuja", "Negresco", "Pacoca", "Prestigio",
+          "Leite em Pó com Morango", "Surpresinha Uva", "Sensação"
         ],
-        gourmet: ["Ninho com Nutell", "Ouro Branco", "Prestigio"]
+        gourmet: [
+          "Ouro Branco", "Leite em Pó com Creme de Avelã", "Mousse Chocolate Nobre",
+          "Ferreiro", "Confete", "Floresta Negra"
+        ]
       };
 
       const filteredFlavors = selectedCategory === 'all'
         ? flavors
         : flavors.filter(f => categorizedFlavors[selectedCategory]?.includes(f.name));
 
-      // Função para adicionar ao pedido
+      // Calcula preço por categoria
+      const getCategoryPrice = (flavorName) => {
+        if (categorizedFlavors.tradicionais.includes(flavorName)) return 7;
+        if (categorizedFlavors.especiais.includes(flavorName)) return 8;
+        if (categorizedFlavors.gourmet.includes(flavorName)) return 9;
+        return 8;
+      };
+
+      // Total do pedido
+      const totalPrice = orderSummary.reduce((sum, item) => sum + item.quantity * getCategoryPrice(item.flavor), 0);
+
+      // Adicionar ao pedido
       const addToOrder = (flavorName) => {
         setFlavors(prev =>
           prev.map(f => {
@@ -103,7 +117,7 @@
         });
       };
 
-      // Remove item do carrinho e devolve ao estoque
+      // Remover do carrinho
       const removeFromOrder = (flavorName) => {
         setOrderSummary(prev => {
           const item = prev.find(i => i.flavor === flavorName);
@@ -121,16 +135,13 @@
         });
       };
 
-      // Calcula total do pedido
-      const totalPrice = orderSummary.reduce((sum, item) => sum + item.quantity * 8.0, 0);
-
-      // Atualiza formulário principal
+      // Atualiza formulário
       const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
       };
 
-      // Abre modal de finalização do pedido
+      // Abre modal de finalizar pedido
       const openModal = () => {
         if (orderSummary.length === 0) {
           alert("Seu carrinho está vazio!");
@@ -139,29 +150,33 @@
         setIsModalOpen(true);
       };
 
-      // Fecha modal de finalização do pedido
+      // Fecha modal de finalizar pedido
       const closeModal = () => {
         setIsModalOpen(false);
         setFormData({ name: '', wallet: '', pickupTime: '', pickupDate: '', phone: '' });
       };
 
-      // Envia dados para WhatsApp
+      // Envia pedido para WhatsApp
       const sendMessageToWhatsApp = () => {
         const { name, wallet, pickupTime, pickupDate, phone } = formData;
         if (!name || !phone || !pickupTime || !pickupDate) {
           alert("Por favor, preencha todos os campos obrigatórios.");
           return;
         }
+
         let message = `*Pedido realizado por:* ${name}%0A`;
         message += `*Telefone:* ${phone}%0A`;
         message += `*Carteira:* ${wallet}%0A`;
         message += `*Data Desejada:* ${pickupDate}%0A`;
         message += `*Horário de Retirada:* ${pickupTime}%0A%0A`;
         message += `*Itens do Pedido:*%0A`;
+
         orderSummary.forEach(item => {
-          message += `- ${item.quantity} x ${item.flavor}%0A`;
+          message += `- ${item.quantity} x ${item.flavor} (R$ ${getCategoryPrice(item.flavor).toFixed(2)})%0A`;
         });
+
         message += `%0A*Total: R$ ${totalPrice.toFixed(2)}*`;
+
         const whatsappURL = `https://wa.me/${phone.replace(/\D/g, '')}?text=${message}`;
         window.open(whatsappURL, '_blank');
         closeModal();
@@ -174,20 +189,26 @@
         return name.trim() !== '' && phone.trim() !== '' && pickupTime !== '' && pickupDate !== '';
       };
 
-      // Atualiza formulário do modal de promoção
-      const handlePromoChange = (e) => {
-        const { name, value } = e.target;
-        setPromoData(prev => ({ ...prev, [name]: value }));
+      // Mostra popup de descrição
+      const showDescription = (flavor, event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        setPopupPosition({
+          top: rect.top - 160,
+          left: rect.left + rect.width / 2
+        });
+        setSelectedFlavor(flavor);
       };
 
-      // Enviar mensagem de promoção para WhatsApp
+      // Esconde popup
+      const hideDescription = () => setSelectedFlavor(null);
+
+      // Cadastro na promoção
       const sendPromoMessage = () => {
         const { phone } = promoData;
         if (!phone) {
           alert("Por favor, insira seu número de WhatsApp.");
           return;
         }
-
         const message = `Olá! Obrigado por se cadastrar para receber nossas promoções diárias! 🎉`;
         const whatsappURL = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(whatsappURL, '_blank');
@@ -195,11 +216,17 @@
         setPromoData({ phone: '' });
       };
 
+      // Atualiza dados do modal de promoção
+      const handlePromoChange = (e) => {
+        const { name, value } = e.target;
+        setPromoData(prev => ({ ...prev, [name]: value }));
+      };
+
       return (
         <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-100">
-          {/* Novo botão flutuante com animação */}
+          {/* Botão flutuante */}
           <div 
-            className="fixed top-4 right-4 z-30 cursor-pointer animate-pulse-notification"
+            className="fixed top-4 right-4 z-30 cursor-pointer"
             onClick={() => setIsPromoModalOpen(true)}
           >
             <div className="bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold px-5 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
@@ -223,10 +250,10 @@
             </p>
 
             {/* Menu horizontal de categorias */}
-            <div className="mt-8 flex justify-center space-x-4 border-b border-pink-300 pb-2">
+            <div className="mt-8 flex justify-center space-x-6 border-b border-pink-300 pb-2">
               <button
                 onClick={() => setSelectedCategory('all')}
-                className={`px-4 py-2 font-medium transition-colors duration-200 ${
+                className={`uppercase px-4 py-2 font-medium transition-colors duration-200 ${
                   selectedCategory === 'all'
                     ? 'text-pink-600 border-b-2 border-pink-600'
                     : 'text-gray-600 hover:text-pink-600'
@@ -235,28 +262,28 @@
                 Todos
               </button>
               <button
-                onClick={() => setSelectedCategory('tradicional')}
-                className={`px-4 py-2 font-medium transition-colors duration-200 ${
-                  selectedCategory === 'tradicional'
+                onClick={() => setSelectedCategory('tradicionais')}
+                className={`uppercase px-4 py-2 font-medium transition-colors duration-200 ${
+                  selectedCategory === 'tradicionais'
                     ? 'text-pink-600 border-b-2 border-pink-600'
                     : 'text-gray-600 hover:text-pink-600'
                 }`}
               >
-                Tradicional
+                Tradicionais
               </button>
               <button
-                onClick={() => setSelectedCategory('especial')}
-                className={`px-4 py-2 font-medium transition-colors duration-200 ${
-                  selectedCategory === 'especial'
+                onClick={() => setSelectedCategory('especiais')}
+                className={`uppercase px-4 py-2 font-medium transition-colors duration-200 ${
+                  selectedCategory === 'especiais'
                     ? 'text-pink-600 border-b-2 border-pink-600'
                     : 'text-gray-600 hover:text-pink-600'
                 }`}
               >
-                Especial
+                Especiais
               </button>
               <button
                 onClick={() => setSelectedCategory('gourmet')}
-                className={`px-4 py-2 font-medium transition-colors duration-200 ${
+                className={`uppercase px-4 py-2 font-medium transition-colors duration-200 ${
                   selectedCategory === 'gourmet'
                     ? 'text-pink-600 border-b-2 border-pink-600'
                     : 'text-gray-600 hover:text-pink-600'
@@ -268,14 +295,16 @@
           </header>
 
           {/* Sabores */}
-          <main className="container mx-auto px-4 pb-32">
+          <main className="container mx-auto px-4 pb-32 pt-10">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
               {filteredFlavors.map((flavor, index) => (
-                <FlavorCard 
-                  key={index}
-                  {...flavor}
-                  onAddToOrder={() => addToOrder(flavor.name)}
-                />
+                <div key={index} className="relative">
+                  <FlavorCard 
+                    {...flavor}
+                    onAddToOrder={() => addToOrder(flavor.name)}
+                    onShowDescription={(e) => showDescription(flavor, e)}
+                  />
+                </div>
               ))}
             </div>
           </main>
@@ -319,7 +348,7 @@
             </div>
           </footer>
 
-          {/* Modal de Finalização do Pedido */}
+          {/* Modal de finalização do pedido */}
           {isModalOpen && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
@@ -334,7 +363,7 @@
                 </div>
                 <h3 className="text-xl font-bold text-[#B92C67] mb-1 text-center">Pollyelly</h3>
                 <p className="text-center text-purple-600 text-sm italic mb-4">Doce tem que ter Sabor.</p>
-                <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+                <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
                       <span className="text-[#B03060]">*</span> Nome Completo
@@ -411,7 +440,7 @@
                     <button
                       type="button"
                       onClick={closeModal}
-                      className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+                      className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition"
                     >
                       Cancelar
                     </button>
@@ -423,7 +452,7 @@
                         isFormValid()
                           ? 'bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700'
                           : 'bg-gray-400 cursor-not-allowed'
-                      }`}
+                      } transition`}
                     >
                       Enviar para WhatsApp
                     </button>
@@ -433,7 +462,7 @@
             </div>
           )}
 
-          {/* Modal de Cadastro para Promoções */}
+          {/* Modal de Promoções */}
           {isPromoModalOpen && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
@@ -455,14 +484,14 @@
                     <button
                       type="button"
                       onClick={() => setIsPromoModalOpen(false)}
-                      className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+                      className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition"
                     >
                       Fechar
                     </button>
                     <button
                       type="button"
                       onClick={sendPromoMessage}
-                      className="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded hover:from-pink-600 hover:to-purple-700"
+                      className="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded hover:from-pink-600 hover:to-purple-700 transition"
                     >
                       Cadastrar
                     </button>
@@ -471,11 +500,49 @@
               </div>
             </div>
           )}
+
+          {/* Balão de descrição do sabor */}
+          {selectedFlavor && (
+            <div
+              style={{
+                position: 'absolute',
+                top: `${popupPosition.top}px`,
+                left: `${popupPosition.left}px`,
+                transform: 'translateX(-50%)',
+                zIndex: 50
+              }}
+              className="animate-float-up bg-white rounded-lg shadow-lg p-4 w-64 border border-pink-200">
+              <h3 className="text-lg font-bold text-pink-800">{selectedFlavor.name}</h3>
+              <p className="text-gray-700 mt-1 text-sm">{selectedFlavor.description}</p>
+              <div className="absolute bottom-[-12px] left-1/2 transform -translate-x-1/2 rotate-45 w-4 h-4 bg-white border-t border-l border-pink-200"></div>
+            </div>
+          )}
         </div>
       );
     }
 
-    function FlavorCard({ name, description, available, onAddToOrder }) {
+    function FlavorCard({ name, description, available, onAddToOrder, onShowDescription }) {
+      const price = getCategoryPrice(name);
+
+      function getCategoryPrice(flavorName) {
+        if ([
+          "Brigadeiro", "Brigadeiro com Amendoim", "Doce de Leite Crocante",
+          "Dois Amores", "Café", "Leite Condensado", "Limão"
+        ].includes(flavorName)) return 7;
+
+        if ([
+          "Maracuja", "Negresco", "Pacoca", "Prestigio",
+          "Leite em Pó com Morango", "Surpresinha Uva", "Sensação"
+        ].includes(flavorName)) return 8;
+
+        if ([
+          "Ouro Branco", "Leite em Pó com Creme de Avelã", "Mousse Chocolate Nobre",
+          "Ferreiro", "Confete", "Floresta Negra"
+        ].includes(flavorName)) return 9;
+
+        return 8;
+      }
+
       return (
         <div className="bg-white rounded-lg shadow-md overflow-hidden transition-all duration-300 hover:shadow-xl hover:scale-105">
           <div className="h-40 bg-gradient-to-r from-pink-200 to-purple-200 flex items-center justify-center">
@@ -490,10 +557,17 @@
             )}
           </div>
           <div className="p-4">
-            <h3 className="font-bold text-lg text-pink-800 mb-1">{name}</h3>
-            <p className="text-sm text-gray-600 mb-3">{description}</p>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold text-lg text-pink-800 truncate">{name}</h3>
+              <button
+                onClick={onShowDescription}
+                className="ml-2 w-7 h-7 bg-pink-100 hover:bg-pink-200 text-black rounded flex items-center justify-center font-bold text-sm transition"
+              >
+                +
+              </button>
+            </div>
             <div className="flex justify-between items-center mb-3">
-              <span className="text-pink-700 font-semibold">R$ 8,00</span>
+              <span className="text-pink-700 font-semibold">R$ {price.toFixed(2)}</span>
             </div>
             <button
               onClick={onAddToOrder}
@@ -511,27 +585,30 @@
       );
     }
 
-    // Lista original de sabores
+    // Lista completa de sabores
     const allFlavors = [
       { name: "Brigadeiro", description: "Clássico brasileiro de chocolate e granulado" },
       { name: "Brigadeiro com Amendoim", description: "Brigadeiro com crocância de amendoim" },
-      { name: "Café", description: "Recheio com sabor intenso de café expresso" },
-      { name: "Confete", description: "Colorido e divertido com vários sabores" },
-      { name: "Confete 2", description: "Colorido e divertido com vários sabores" },
       { name: "Doce de Leite Crocante", description: "Doce de leite com crocância especial" },
       { name: "Dois Amores", description: "Combinação de morango e chocolate" },
-      { name: "Ferreiro", description: "Combinação de café, chocolate e amendoim" },
+      { name: "Café", description: "Recheio com sabor intenso de café expresso" },
       { name: "Leite Condensado", description: "Doce de leite condensado com toque de baunilha" },
       { name: "Limão", description: "Recheio refrescante de limão siciliano" },
       { name: "Maracuja", description: "Sabor tropical de maracujá com acerola" },
-      { name: "Mousse Chocolate", description: "Leve mousse de chocolate" },
-      { name: "Mousse de Chocolate", description: "Leve mousse de chocolate" },
-      { name: "Ninho com Nutell", description: "Leite ninho com recheio de Nutella" },
-      { name: "Oreo", description: "Recheio cremoso com pedaços de biscoito Oreo" },
-      { name: "Ouro Branco", description: "Chocolate branco com recheio de caramelo" },
+      { name: "Negresco", description: "Biscoito recheado com chocolate nobre" },
       { name: "Pacoca", description: "Doce de amendoim com crocância especial" },
       { name: "Prestigio", description: "Coco com cobertura de chocolate" },
+      { name: "Leite em Pó com Morango", description: "Sabor suave de leite em pó com morango" },
+      { name: "Surpresinha Uva", description: "Recheio surpresa com uva e gelatina" },
+      { name: "Sensação", description: "Morango fresco com recheio cremoso" },
+      { name: "Ouro Branco", description: "Chocolate branco com recheio de caramelo" },
+      { name: "Leite em Pó com Creme de Avelã", description: "Sabor refinado com Nutella e leite em pó" },
+      { name: "Mousse Chocolate Nobre", description: "Mousse leve com chocolate belga" },
+      { name: "Ferreiro", description: "Combinação de café, chocolate e amendoim" },
+      { name: "Confete", description: "Colorido e divertido com vários sabores" },
+      { name: "Floresta Negra", description: "Cherry com chocolate e chantilly" }
     ];
+
     const sortedFlavors = [...allFlavors]
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(flavor => ({
